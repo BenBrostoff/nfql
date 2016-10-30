@@ -14,18 +14,23 @@ import request from 'request';
 import Promise from 'bluebird';
 
 const app = express();
-// TODO - make dynamic
-const week = 8;
-const nflApiEndpoint = `http://api.fantasy.nfl.com/v1/players/stats?statType=weekStats&season=2016&format=json&week=${week}`;
+const getNflApiEndpoint = (week) => {
+    return `http://api.fantasy.nfl.com/v1/players/stats?statType=weekStats&season=2016&format=json&week=${week}`;
+};
 const fetch = Promise.promisify(request.get);
 
-const getNFLData = () => fetch(nflApiEndpoint);
+const getNFLData = (w) => fetch(getNflApiEndpoint(w));
 const sortByPoints = (p1, p2) => p2.weekPts - p1.weekPts;
 const parsePlayerData = (res) => {
     return JSON.parse(res.body).players
         .slice(0, 100)
+        .filter(
+            (p) => pos ? p.position === pos : true
+        )
         .sort(sortByPoints);
 };
+
+let week, pos;
 
 const playerFields = () => {
     return {
@@ -83,12 +88,19 @@ const PlayerType = new GraphQLObjectType({
 var nfqlSchema = new GraphQLSchema({
     query: new GraphQLObjectType({
         name: 'RootQueryType',
+
         fields: {
             players: {
                 type: new GraphQLList(PlayerType),
                 description: 'Player performances for the current week.',
-                resolve() {
-                    return getNFLData().then(parsePlayerData);
+                args: {
+                    position:{ type: new GraphQLNonNull(GraphQLString) },
+                    week: { type: new GraphQLNonNull(GraphQLFloat) }
+                },
+                resolve(source, args) {
+                    week = args.week; // better way to do this?
+                    pos = args.position;
+                    return getNFLData(week).then(parsePlayerData);
                 }
             }
         }
