@@ -6,12 +6,13 @@ import {
     GraphQLList,
     GraphQLString,
     GraphQLFloat,
-    GraphQLNonNull
+    GraphQLNonNull,
 } from 'graphql';
 import express from 'express';
 import graphqlHTTP from 'express-graphql';
 import request from 'request';
 import Promise from 'bluebird';
+import cors from 'cors';
 
 const app = express();
 const getNflApiEndpoint = (week) => {
@@ -85,32 +86,50 @@ const PlayerType = new GraphQLObjectType({
 
 
 
-var nfqlSchema = new GraphQLSchema({
-    query: new GraphQLObjectType({
-        name: 'RootQueryType',
-
-        fields: {
-            players: {
-                type: new GraphQLList(PlayerType),
-                description: 'Player performances for the current week.',
-                args: {
-                    position:{ type: new GraphQLNonNull(GraphQLString) },
-                    week: { type: new GraphQLNonNull(GraphQLFloat) }
-                },
-                resolve(source, args) {
-                    week = args.week; // better way to do this?
-                    pos = args.position;
-                    return getNFLData(week).then(parsePlayerData);
-                }
-            }
+const query = new GraphQLObjectType({
+    name: 'Query',
+    fields: () => ({
+        viewer: {
+            resolve: () => {
+                // really don't like this and want clarity on best way
+                // https://github.com/facebook/relay/issues/112
+                return {};
+            },
+            type: new GraphQLObjectType({
+                name: 'Viewer',
+                description: "A hack to get around Relay stuff",
+                fields: () => ({
+                    activate: {
+                        type: new GraphQLNonNull(GraphQLString),
+                        description: 'Activation message',
+                        resolve: () => {
+                            return 'Activated.'
+                        }
+                    },
+                    players: {
+                        type: new GraphQLList(PlayerType),
+                        description: 'Player performances for the current week.',
+                        args: {
+                            position: {type: new GraphQLNonNull(GraphQLString)},
+                            week: {type: new GraphQLNonNull(GraphQLFloat)}
+                        },
+                        resolve: (source, args) => {
+                            week = args.week; // better way to do this?
+                            pos = args.position;
+                            return getNFLData(week).then(parsePlayerData);
+                        }
+                    }
+                })
+            })
         }
-    })
+    }),
 });
 
+app.use(cors());
 
 app.use('/graphql', graphqlHTTP({
-    schema: nfqlSchema,
+    schema: new GraphQLSchema({ query }),
     graphiql: true
 }));
 
-app.listen(3000);
+app.listen(5000);
